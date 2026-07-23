@@ -1,7 +1,7 @@
 # esp32-garage-IoT-controller
 
 ## Overview
-A simple, web-based IoT garage management system built upon the ESP-32-C6-WROOM.  This locally-hosted system provides simple garage door control, parking proximity warning, and an informational dashboard for monitoring indoor ambient temperature and humidity.
+A simple, web-based IoT garage management system built upon the ESP-32-C6-WROOM.  This locally hosted system provides simple garage door control, parking proximity warning, and an informational dashboard for monitoring indoor ambient temperature and humidity.
 
 
 ---
@@ -10,7 +10,7 @@ A simple, web-based IoT garage management system built upon the ESP-32-C6-WROOM.
 ### Dependencies
 
 - Adafruit_Sensor.h
-- DHT.h
+- [DHT.h](https://github.com/adafruit/DHT-sensor-library) 
 - Wire.h
 - LiquidCrystal_I2C.h
 
@@ -20,3 +20,6 @@ A simple, web-based IoT garage management system built upon the ESP-32-C6-WROOM.
 - DHT11 Sensor
 - I2C 1602 LCD Display Module
 - Passive Buzzer (1x)
+
+## Acknowledgments
+* Portions of the time synchronization logic are based on the [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32) SimpleTime example.
