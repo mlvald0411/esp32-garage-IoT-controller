@@ -5,6 +5,7 @@
 #include <LiquidCrystal_I2C.h>
 
 #include <WiFi.h>
+#include <WebServer.h>
 #include <time.h>
 #include "esp_sntp.h"
 
@@ -16,9 +17,10 @@ const uint8_t LCD_scl = 5;
 const uint8_t LCD_ADDR = 0x27;
 const uint8_t buzzPin = 7;
 const uint8_t buttonPin = 10;
+const uint8_t relaySignalPin = 18;
 
-const char *ssid = "WiFi goes here";
-const char *pass = "Passwords goes here";
+const char *ssid = "NETWORK GOES HERE";
+const char *pass = "PASSWORD GOES HERE";
 const char *ntpServer = "pool.ntp.org"; 
 
 const long gmtOffset_sec = -18000;
@@ -28,6 +30,9 @@ const int daylightOffset_sec = 3600;
 uint8_t buttonState = 0;
 uint8_t prevButtonState = 0;
 uint8_t menuState = 0; // 0 default
+bool menuStateChanged = false;
+
+bool relayActivate = false;
 
 //delcare collected values
 float tempF = 0;
@@ -40,8 +45,11 @@ uint8_t m = 0;
 uint8_t s = 0;
 uint8_t mon = 0;
 uint8_t day = 0;
-uint8_t yrs = 0;
+uint16_t yrs = 0;
 
+
+//Webserver object setup
+NetworkServer server(80);
 
 //define DHT sensor object (assume 6 count)
 DHT dht(dht_pin, DHT11);
@@ -50,7 +58,7 @@ DHT dht(dht_pin, DHT11);
 LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
 
 
-//---------------------Define Task Functions-----------------------//
+//----------------------------------Define Functions--------------------------------------//
 
 void connectToWifi(){
     Serial.print("Connecting to ");
@@ -69,11 +77,9 @@ void connectToWifi(){
     Serial.print(WiFi.localIP()); 
 
     lcd.clear();
-    lcd.setCursor(0,0);
-    lcd.print("Connected!");
-    lcd.setCursor(0,1);
+    lcd.print("Connected to WiFi!");
     lcd.print(WiFi.localIP());
-    delay(1000);
+    delay(750);
     lcd.clear();
     
 }
@@ -91,12 +97,90 @@ void printLocalTime() {
   m = timeinfo.tm_min;
   s = timeinfo.tm_sec;
 
-  mon = timeinfo.tm_mday + 1;
+  mon = timeinfo.tm_mon + 1;
   day = timeinfo.tm_mday;
   yrs = timeinfo.tm_year + 1900;
+  
+}
 
 
-  delay(1000);
+void UpdateButtons(){
+
+  /**/
+}
+
+//----------------------------------Define Task Functions---------------------------------//
+
+void retrieveLocalTime(void * params){
+  /*
+    Repeatedly calls the print local time function to reassign time & date values
+  
+  */
+
+  for(;;){
+    printLocalTime();
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+  }
+}
+
+
+
+
+void printToLCD(void * params){
+
+  /*
+    Continuously runs to always update the print
+
+    ->retrieveLocalTime always reassigns the time & date values
+    ->buttonTask always changes menuState based on the button press
+  
+  */
+
+  
+  for(;;){
+
+    if(menuStateChanged == true){
+      //Clears LCD to display new information
+      lcd.clear();
+
+      menuStateChanged = false;
+    }
+
+    if(menuState == 0){
+      lcd.setCursor(0,0);
+      lcd.print("Temp (F");
+      lcd.print((char)223);
+      lcd.print(")");
+      lcd.print(": ");
+      lcd.print(tempF);
+      
+      lcd.setCursor(0,1);
+      lcd.print("Humidity ");
+      lcd.print(humidity);
+      lcd.print(" %");
+    }
+    else{
+      lcd.setCursor(0,0);
+      lcd.print("Time: ");
+      lcd.print(h);
+      lcd.print(":");
+      lcd.print(m);
+      lcd.print(":");
+      lcd.print(s); 
+
+      lcd.setCursor(0,1);
+      lcd.print("Date: ");
+      lcd.print(mon);
+      lcd.print("/");
+      lcd.print(day);
+      lcd.print("/");
+      lcd.print(yrs);
+    }
+
+  }
+
 }
 
 
@@ -121,41 +205,14 @@ void buttonTask(void * params){
     //Detects change in button state & changes menu
     if(prevButtonState == 1 && buttonState == 0){
       
-
       if(menuState == 0){ /* State 0 -> 1*/
-
+        menuStateChanged = true;
         menuState = 1;
-        lcd.setCursor(0,0);
-        lcd.print("Temp (F");
-        lcd.print((char)223);
-        lcd.print(")");
-        lcd.print(": ");
-        lcd.print(tempF);
         
-        lcd.setCursor(0,1);
-        lcd.print("Humidity ");
-        lcd.print(humidity);
-        lcd.print(" %");
       }
       else{ /* State 1 -> 0 */
-
+        menuStateChanged = true;
         menuState = 0;
-        
-        lcd.setCursor(0,0);
-        lcd.print("Time: ");
-        lcd.print(h);
-        lcd.print(":");
-        lcd.print(m);
-        lcd.print(":");
-        lcd.print(s); 
-
-        lcd.setCursor(0,1);
-        lcd.print("Date: ");
-        lcd.print(mon);
-        lcd.print("/");
-        lcd.print(day);
-        lcd.print("/");
-        lcd.print(yrs);
 
       }
 
@@ -172,26 +229,33 @@ void buttonTask(void * params){
 
 
 
-void WifiTask(void * params){
+void webServerTask(void * params){
   /*
-    Connects to WiFi & communicates through 
-    the HTML to allow for local remote control.
+    Continuously loops to retrieve any inputs 
+    via the webpage
   
   */
 
+  for(;;){
 
-}
+
+    server.handleClient(); 
+
+    vTaskDelay( 10 / portTICK_PERIOD_MS);
+  }
+
+} 
 
 
 
 void DHTread(void * params){
 
-    /*
-        Reads input data from DHT sensor & assigns to respective 
-        temperature & humidity vars every 2 seconds.
+  /*
+      Reads input data from DHT sensor & assigns to respective 
+      temperature & humidity vars every 2 seconds.
 
-        Prints collected information to serial.
-    */
+      Prints collected information to serial.
+  */
   
   for(;;){
     temp = dht.readTemperature();
@@ -219,10 +283,35 @@ void DHTread(void * params){
   }
 }
 
+void relayTask(void * params){
+
+  /*
+    Detects signal from WiFiTask to simulate a garage door 
+    activation. This is achieved by shorting the relay's output
+    for 1 second.
+
+    HIGH = open relay
+    LOW = closed relay
+
+  */
 
 
+  for(;;){
+    //keep in default state unless otherwise
+    digitalWrite(relaySignalPin, HIGH);
 
-//-----------------------Setup---------------------------//
+    if(relayActivate){
+      digitalWrite(relaySignalPin, LOW);
+      vTaskDelay ( 1000 / portTICK_PERIOD_MS);
+      digitalWrite(relaySignalPin, HIGH); //returns back to default state
+    }
+
+    vTaskDelay( 50 / portTICK_PERIOD_MS);
+
+  }
+}
+
+//--------------------------------------------Setup-----------------------------------------------//
 
 
 void setup() {
@@ -240,9 +329,9 @@ void setup() {
   lcd.backlight();
   lcd.clear();
   
-  //instantiate  button
+  //instantiate  button & relay 
   pinMode(buttonPin, INPUT_PULLUP); //1 (not pressed), 0 (pressed)
-  
+  pinMode(relaySignalPin, OUTPUT); //1 (not activated), 0 (activated)
   
 
   connectToWifi();
@@ -250,6 +339,15 @@ void setup() {
   configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
 
   printLocalTime();
+
+
+  //defines route handler callback function
+  server.on("/", sendWebsite);
+  server.on("/XML", sendXML);
+  server.on("/Button_0", processButton0);
+  server.on("/Button_1", processButton1);
+  //server.on("/Button_2", processButton2);
+
 
   
   /*
@@ -285,6 +383,43 @@ void setup() {
     2048, // stack size
     NULL, // task parameters,
     3, // task priority
+    NULL // task handle
+  );
+
+  xTaskCreate(
+    printToLCD, // Function Name
+    "printToLCD", //task Name
+    2048, // stack size
+    NULL, // task parameters,
+    3, // task priority
+    NULL // task handle
+  );
+
+  xTaskCreate(
+    retrieveLocalTime, // Function Name
+    "retrieveLocalTime", //task Name
+    2048, // stack size
+    NULL, // task parameters,
+    3, // task priority
+    NULL // task handle
+  );
+
+  xTaskCreate(
+    relayTask, // Function Name
+    "relayTask", //task Name
+    2048, // stack size
+    NULL, // task parameters,
+    3, // task priority
+    NULL // task handle
+  );
+
+
+  xTaskCreate(
+    webServerTask, // Function Name
+    "webServerTask", //task Name
+    2048, // stack size
+    NULL, // task parameters,
+    2, // task priority
     NULL // task handle
   );
 }
