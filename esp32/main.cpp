@@ -23,8 +23,8 @@ const uint8_t buzzPin = 7;
 const uint8_t buttonPin = 10;
 const uint8_t relaySignalPin = 18;
 
-const char *ssid = "SpectrumSetup-C5";
-const char *pass = "smallpoodle907";
+const char *ssid = "WIFI GOES HERE";
+const char *pass = "PASSWORD GOES HERE";
 const char *ntpServer = "pool.ntp.org"; 
 
 const long gmtOffset_sec = -18000;
