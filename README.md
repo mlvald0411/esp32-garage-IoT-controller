@@ -3,7 +3,7 @@
 ## Overview
 A simple, web-based IoT garage management system built upon the ESP32 microcontroller. This locally-hosted system provides simple garage door control and an informational dashboard for monitoring indoor ambient temperature and humidity.
 
-![Garage-IOT-controller Demo](IoT_demo.jpg)
+![Garage-IOT-controller Demo](assets/IoT_demo.jpg)
 
 ---
 
